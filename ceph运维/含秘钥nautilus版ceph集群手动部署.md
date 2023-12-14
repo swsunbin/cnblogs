@@ -73,7 +73,26 @@ sudo ceph-authtool --create-keyring /tmp/ceph.mon.keyring --gen-key -n mon. --ca
 	caps mon = "allow *"
 ```
 
-生成管理员密钥环 `keyring`，生成 `client.admin` 用户并加入密钥环：
+生成管理员密钥环 keyring，生成` client.admin `用户并加入密钥环：
+
+```bash
+sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow *' --cap mgr 'allow *'
+```
+
+输出：
+
+```bash
+[root@node01 ~]# cat /etc/ceph/ceph.client.admin.keyring
+[client.admin]
+	key = AQB3Yt9kcV0CHxAA2ljATohTAe0u75zEtyTgLA==
+	caps mds = "allow *"
+	caps mgr = "allow *"
+	caps mon = "allow *"
+	caps osd = "allow *"
+```
+
+4. 生成管理员密钥环 `keyring`，生成 `client.admin` 用户并加入密钥环：
+
 ```bash
 sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow *' --cap mgr 'allow *'
 ```
@@ -88,7 +107,7 @@ sudo ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-ke
 	caps mon = "profile bootstrap-osd"
 ```
 
-将生成的`keyring `导入到` ceph.mon.keyrin`：
+5. 将生成的`keyring `导入到` ceph.mon.keyrin`：
 
 ```bash
 sudo ceph-authtool /tmp/ceph.mon.keyring --import-keyring /etc/ceph/ceph.client.admin.keyring
@@ -110,6 +129,7 @@ importing contents of /etc/ceph/ceph.client.admin.keyring into /tmp/ceph.mon.key
 	caps mgr = "allow *"
 	caps mon = "allow *"
 	caps osd = "allow *"
+
 [root@node01 ~]# sudo ceph-authtool /tmp/ceph.mon.keyring --import-keyring /var/lib/ceph/bootstrap-osd/ceph.keyring
 importing contents of /var/lib/ceph/bootstrap-osd/ceph.keyring into /tmp/ceph.mon.keyring
 [root@node01 ~]# cat /tmp/ceph.mon.keyring
@@ -128,38 +148,38 @@ importing contents of /var/lib/ceph/bootstrap-osd/ceph.keyring into /tmp/ceph.mo
 	caps mon = "profile bootstrap-osd"
 ```
 
-更改 `ceph.mon.keyring` 的所有者：
+6. 更改 `ceph.mon.keyring` 的所有者：
 
 ```bash
 sudo chown ceph:ceph /tmp/ceph.mon.keyring
 ```
 
-使用主机名、主机 `IP` 地址和`fsid` 生成`monitor`映射，保存在 文件` /tmp/monmap`中：
+7. 使用主机名、主机 `IP` 地址和`fsid` 生成`monitor`映射，保存在 文件` /tmp/monmap`中：
 
 ``` bash
 monmaptool --create --addv node01 [v2:192.168.19.101:3300,v1:192.168.19.101:6789]  --fsid 33af1a28-8923-4d40-af06-90c376ed74b0  /tmp/monmap
 ```
 
-在`monitor`主机上创建默认数据目录，目录名是`{cluster-name}-{hostname}`格式 :
+8. 在`monitor`主机上创建默认数据目录，目录名是`{cluster-name}-{hostname}`格式 :
 
 ```bash
 sudo -u ceph mkdir /var/lib/ceph/mon/ceph-node01
 ```
 
-在`node1`节点对`monitor`进行初始化:
+9. 在`node1`节点对`monitor`进行初始化:
 
 ```bash
 sudo -u ceph ceph-mon --mkfs -i node01  --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
 ```
 
-将配置文件拷贝到其他节点：
+10. 将配置文件拷贝到其他节点：
 
 ```bash
 scp /etc/ceph/ceph.conf node2:/etc/ceph/ceph.conf
 scp /etc/ceph/ceph.conf node3:/etc/ceph/ceph.conf
 ```
 
- 将`mon keyring,mon` `map`及`admin keyring`拷贝到其他节点
+11. 将`mon keyring,mon` `map`及`admin keyring`拷贝到其他节点
 
 ```bash
 scp /tmp/ceph.mon.keyring node2:/tmp/ceph.mon.keyring
@@ -171,12 +191,48 @@ scp /etc/ceph/ceph.client.admin.keyring node3:/etc/ceph/ceph.client.admin.keyrin
 scp /tmp/monmap node3:/tmp/monmap
 ```
 
-##  三、 部署OSD
-部署osd：
+12. 在`node2`、`node3上`添加`monitor`，分别在这两个节点创建数据目录：
+
 ```bash
-ceph-volume lvm create --bluestore --data /dev/sdx  --block.wal /dev/nsdy --block.db /dev/sdz
-ceph-volume  lvm create --bluestore --data /dev/sdx --block.db /dev/sdy
-ceph-volume  lvm create --bluestore --data /dev/sdx
+sudo -u mkdir /var/lib/ceph/mon/ceph-`hostname -s`
+```
+
+即：
+
+```b ash
+sudo -u mkdir /var/lib/ceph/mon/ceph-node02
+sudo -u mkdir /var/lib/ceph/mon/ceph-node03
+```
+
+13. 分别在这两个节点对`monitor`进行初始化：
+
+```bash
+sudo -u ceph-mon --mkfs -i `hostname -s` --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+```
+
+即：
+
+```bash
+sudo -u ceph-mon --mkfs -i node02 --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+sudo -u ceph-mon --mkfs -i node03 --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+```
+
+14. 分别在三个节点启动`ceph-mon`服务：
+
+```bash
+systemctl start ceph-mon@`hostname -s`
+systemctl enable ceph-mon@`hostname -s`
+```
+
+
+
+##  三、 部署OSD
+
+部署`osd`：
+```bash
+ceph-volume lvm create --bluestore --data /dev/sdx --block.wal /dev/nsdy --block.db /dev/sdz
+ceph-volume	lvm create --bluestore --data /dev/sdx --block.db /dev/sdy
+ceph-volume	lvm create --bluestore --data /dev/sdx
 ```
 输出：
 ```bash
@@ -267,15 +323,15 @@ systemctl enable ceph-mgr@node01
 ## 五、部署mds
 1. 创建`mds`数据目录:
 ```bash
-sudo -u ceph mkdir -p /var/lib/ceph/mds/ceph-node01
+sudo -u ceph mkdir -p /var/lib/ceph/mds/ceph-`hostname -s`
 ```
 2. 创建keyting
 ```bash
-ceph-authtool --create-keyring /var/lib/ceph/mds/ceph-node01/keyring --gen-key -n mds.node01
+ceph-authtool --create-keyring /var/lib/ceph/mds/ceph-`hostname -s`/keyring --gen-key -n mds.`hostname -s`
 ```
 输出：
 ```bash
-[root@node01 ~]# ceph-authtool --create-keyring /var/lib/ceph/mds/ceph-node01/keyring --gen-key -n mds.node01
+[root@node01 ~]# ceph-authtool --create-keyring /var/lib/ceph/mds/ceph-`hostname -s`/keyring --gen-key -n mds.`hostname -s`
 creating /var/lib/ceph/mds/ceph-node01/keyring
 [root@node01 ~]# cat /var/lib/ceph/mds/ceph-node01/keyring
 [mds.node01]
@@ -283,14 +339,14 @@ creating /var/lib/ceph/mds/ceph-node01/keyring
 ```
 3. 导入`keyring`并设置权限：
 ```bash
-ceph auth add mds.node01 osd "allow rwx" mds "allow" mon "allow profile mds" -i /var/lib/ceph/mds/ceph-node01/keyring
+ceph auth add mds.`hostname -s` osd "allow rwx" mds "allow" mon "allow profile mds" -i /var/lib/ceph/mds/ceph-`hosname -s`/keyring
 ```
 ```bash
 chown ceph:ceph /var/lib/ceph/mds/ceph-node01/keyring
 ```
 启动`mds`：
 ```bash
-systemctl start ceph-mds@node01 && systemctl enable ceph-mds@ndoe01
+systemctl start ceph-mds@`hostname -s` && systemctl enable ceph-mds@`hostname -s`
 ```
 4. `cephfs` 需要两个`pool`池，`cephfs_data `和 `cephfs_metadata`，分别存储文件数据和文件元数据
 
@@ -302,9 +358,9 @@ ceph osd pool create cephfs_data 4
 ```bash
 ceph osd pool create cephfs_metadata 4
 ```
-启动文件系统
+启动文件系统：元数据池在前，数据池在后
 ```bash
-ceph fs new cephfs cephfs_metadata cephfs_data  # 元数据池在前，数据池在后
+ceph fs new cephfs cephfs_metadata cephfs_data
 ```
 
 

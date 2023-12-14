@@ -8,6 +8,7 @@ ceph mon getmap -o monmap.bin
 2. 修改`mon`配置
 
 ```bash
+
 #打印查看原来的mon配置
 monmaptool --print monmap.bin
 #删除原来mon配置(多个节点直接在后面加"--rm xxxx"即可)
